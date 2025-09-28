@@ -1,11 +1,19 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 export default function AdminDashboard({ token, onLogout }) {
   const [events, setEvents] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [date, setDate] = useState("");
+  const [startAt, setStartAt] = useState("");
+  const [endAt, setEndAt] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ title: "", description: "", startAt: "", endAt: "" });
+  const [category, setCategory] = useState("");
+
+  const categories = ["Tech", "Music", "Sports", "Education", "Business", "Health", "Arts", "Food"];
 
   // Fetch events created by admin
   const fetchEvents = async () => {
@@ -18,6 +26,60 @@ export default function AdminDashboard({ token, onLogout }) {
     } catch (err) {
       console.error(err);
       setEvents([]);
+    }
+  };
+
+  const startEdit = (ev) => {
+    setEditingId(ev._id);
+    setEditForm({
+      title: ev.title || "",
+      description: ev.description || "",
+      startAt: ev.startAt ? new Date(ev.startAt).toISOString().slice(0, 16) : "",
+      endAt: ev.endAt ? new Date(ev.endAt).toISOString().slice(0, 16) : "",
+    });
+    setCategory(ev.category || "");
+  };
+
+  const saveEdit = async () => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/events/${editingId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          title: editForm.title,
+          description: editForm.description,
+          startAt: editForm.startAt ? new Date(editForm.startAt).toISOString() : null,
+          endAt: editForm.endAt ? new Date(editForm.endAt).toISOString() : null,
+          category: category || null,
+        }),
+      });
+      const data = await res.json();
+      if (data.event) {
+        setEditingId(null);
+        fetchEvents();
+      } else {
+        alert(data.error || "Update failed");
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const deleteEvent = async (id) => {
+    if (!window.confirm("Delete this event?")) return;
+    try {
+      const res = await fetch(`http://localhost:5000/api/events/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.msg) {
+        fetchEvents();
+      } else {
+        alert(data.error || "Delete failed");
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -35,15 +97,23 @@ export default function AdminDashboard({ token, onLogout }) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ title, description, date }),
+        body: JSON.stringify({
+          title,
+          description,
+          startAt: startAt ? new Date(startAt).toISOString() : null,
+          endAt: endAt ? new Date(endAt).toISOString() : null,
+          category: selectedCategory,
+        }),
       });
       const data = await res.json();
       if (data.event) {
         alert("Event created successfully!");
         setTitle("");
         setDescription("");
-        setDate("");
+        setStartAt("");
+        setEndAt("");
         setShowCreate(false);
+        setSelectedCategory(null);
         fetchEvents();
       } else {
         alert(data.error || "Failed to create event");
@@ -68,120 +138,147 @@ export default function AdminDashboard({ token, onLogout }) {
         )
       : null;
 
+  const [rsvpForEvent, setRsvpForEvent] = useState({}); // eventId -> { counts, list }
+
+  const loadRsvp = async (eventId) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/rsvps/${eventId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data && data.counts) {
+        setRsvpForEvent((prev) => ({ ...prev, [eventId]: data }));
+      }
+    } catch (e) { console.error(e); }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 p-6">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-4xl font-extrabold text-white drop-shadow-lg">
-          Admin Dashboard
-        </h1>
-        <button
-          onClick={onLogout}
-          className="bg-red-500 text-white px-5 py-2 rounded-lg shadow-md hover:bg-red-600 transition duration-300"
-        >
-          Logout
-        </button>
+    <div className="p-2 sm:p-4">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Admin Dashboard</h1>
       </div>
 
       {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-2xl shadow-lg text-center">
-          <h3 className="text-lg font-semibold text-purple-700">Total Events</h3>
-          <p className="text-3xl font-bold">{events.length}</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white p-5 rounded-xl border border-gray-200 text-center">
+          <h3 className="text-sm font-medium text-gray-600">Total Events</h3>
+          <p className="mt-1 text-2xl font-semibold text-gray-900">{events.length}</p>
         </div>
-        <div className="bg-white p-6 rounded-2xl shadow-lg text-center">
-          <h3 className="text-lg font-semibold text-purple-700">Total Registrations</h3>
-          <p className="text-3xl font-bold">{totalRegistrations}</p>
+        <div className="bg-white p-5 rounded-xl border border-gray-200 text-center">
+          <h3 className="text-sm font-medium text-gray-600">Total Registrations</h3>
+          <p className="mt-1 text-2xl font-semibold text-gray-900">{totalRegistrations}</p>
         </div>
-        
       </div>
 
-      {/* Create Event Form */}
-      {showCreate && (
+      {/* Admin Tools */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Admin Tools</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Link to="/admin/certificates" className="p-6 bg-white border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-colors">
+            <div className="text-2xl mb-2">🏆</div>
+            <h3 className="font-medium text-gray-900">Certificate Management</h3>
+            <p className="text-sm text-gray-600 mt-1">Manage digital certificates and signatures</p>
+          </Link>
+          <div className="p-6 bg-white border border-gray-200 rounded-xl">
+            <div className="text-2xl mb-2">📊</div>
+            <h3 className="font-medium text-gray-900">Analytics</h3>
+            <p className="text-sm text-gray-600 mt-1">Event performance metrics (Coming Soon)</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Category Selection (links to dedicated pages) */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Event Categories</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {categories.map((cat) => (
+            <Link key={cat} to={`/admin/category/${encodeURIComponent(cat)}`} className="p-6 bg-white border border-gray-200 rounded-xl hover:border-purple-300 hover:bg-purple-50 transition-colors text-center">
+              <div className="text-2xl mb-2">
+                {cat === 'Tech' && '💻'}
+                {cat === 'Music' && '🎵'}
+                {cat === 'Sports' && '⚽'}
+                {cat === 'Education' && '📚'}
+                {cat === 'Business' && '💼'}
+                {cat === 'Health' && '🏥'}
+                {cat === 'Arts' && '🎨'}
+                {cat === 'Food' && '🍕'}
+              </div>
+              <h3 className="font-medium text-gray-900">{cat}</h3>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* Back to Categories */}
+      {selectedCategory && (
+        <div className="mb-6">
+          <button
+            onClick={() => setSelectedCategory(null)}
+            className="text-purple-600 hover:text-purple-700 font-medium"
+          >
+            ← Back to Categories
+          </button>
+          <h2 className="text-xl font-semibold text-gray-900 mt-2">Create {selectedCategory} Event</h2>
+        </div>
+      )}
+
+      {/* Create Event Form (kept for quick use if selectedCategory is set) */}
+      {selectedCategory && showCreate && (
         <form
           onSubmit={handleCreate}
-          className="bg-white p-6 rounded-2xl shadow-lg mb-6 max-w-md"
+          className="bg-white p-6 rounded-xl border border-gray-200 mb-6 max-w-xl"
         >
           <h2 className="font-bold text-xl mb-4 text-purple-700">
-            Create Event
+            Create {selectedCategory} Event
           </h2>
           <input
-            placeholder="Title"
+            placeholder="Event title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full p-3 border mb-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500"
+            className="w-full p-3 border border-gray-300 mb-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
             required
           />
           <input
-            placeholder="Description"
+            placeholder="Short description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="w-full p-3 border mb-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500"
+            className="w-full p-3 border border-gray-300 mb-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full p-3 border mb-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-fuchsia-500"
-            required
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+            <input
+              type="datetime-local"
+              value={startAt}
+              onChange={(e) => setStartAt(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              required
+            />
+            <input
+              type="datetime-local"
+              value={endAt}
+              onChange={(e) => setEndAt(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+            />
+          </div>
           <button
             type="submit"
-            className="w-full bg-green-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-green-600 transition duration-300"
+            className="w-full bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition"
           >
-            Create Event
+            Create {selectedCategory} Event
           </button>
         </form>
       )}
 
-      {!showCreate && (
+      {selectedCategory && !showCreate && (
         <button
           onClick={() => setShowCreate(true)}
-          className="bg-blue-500 text-white px-5 py-2 rounded-lg mb-6 shadow-md hover:bg-blue-600 transition duration-300"
+          className="bg-purple-600 text-white px-5 py-2 rounded-lg mb-6 hover:bg-purple-700 transition"
         >
-          ➕ Add New Event
+          ➕ Create {selectedCategory} Event
         </button>
       )}
 
-      {/* Events */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {events.length === 0 ? (
-          <p className="text-white font-semibold text-lg">
-            No events created yet.
-          </p>
-        ) : (
-          events.map((ev) => (
-            <div
-              key={ev._id}
-              className="bg-white p-6 rounded-2xl shadow-lg hover:shadow-xl transition duration-300"
-            >
-              <h2 className="text-2xl font-bold text-purple-700 mb-2">
-                {ev.title}
-              </h2>
-              <p className="text-gray-600 mb-2">{ev.description}</p>
-              <p className="text-sm text-gray-500 mb-1">
-                📅 {new Date(ev.date).toLocaleDateString()}
-              </p>
-              <p className="text-sm text-gray-500 mb-1">
-                👤 Created by: {ev.createdBy?.name} ({ev.createdBy?.email})
-              </p>
-              <p className="text-sm text-gray-500 mb-2">
-                📝 Registered Users: {ev.registeredUsers?.length || 0}
-              </p>
-
-              {ev.registeredUsers?.length > 0 && (
-                <ul className="bg-gray-100 p-3 rounded-lg text-gray-700 text-sm">
-                  {ev.registeredUsers.map((user) => (
-                    <li key={user._id} className="mb-1">
-                      {user.name} ({user.email})
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ))
-        )}
-      </div>
+      {/* Events are now shown only on the category page (/admin/category/:cat) */}
     </div>
   );
 }
+

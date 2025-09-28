@@ -96,3 +96,16 @@ router.get("/all-users", adminMiddleware, async (req, res) => {
 
 
 module.exports = router;
+// Get current user info
+router.get("/me", async (req, res) => {
+  try {
+    const token = req.headers["authorization"]?.split(" ")[1];
+    if (!token) return res.status(401).json({ error: "No token" });
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id, "name email role");
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json({ id: user._id, name: user.name, email: user.email, role: user.role });
+  } catch (e) {
+    res.status(401).json({ error: "Invalid token" });
+  }
+});

@@ -19,7 +19,7 @@ export default function Login({ onLogin }) {
       });
       const data = await res.json();
       if (data.token && data.role === role) {
-        onLogin(data.token, data.role);
+        onLogin(data.token, data.role, data.user);
         role === "admin" ? navigate("/admin") : navigate("/dashboard");
       } else alert(data.error || "Login failed");
     } catch (err) {

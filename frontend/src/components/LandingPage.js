@@ -6,18 +6,6 @@ import { motion } from "framer-motion";
 export default function LandingPage() {
   return (
     <div className="flex flex-col min-h-screen font-sans bg-white">
-      
-      {/* Navbar */}
-      <nav className="flex justify-between items-center px-6 py-4 bg-white shadow-md sticky top-0 z-50">
-        <h1 className="text-2xl font-bold text-purple-700">Event Manager</h1>
-        <div className="flex gap-6">
-          <Link to="/about" className="text-purple-700 font-semibold hover:text-purple-900">About</Link>
-          <Link to="/faq" className="text-purple-700 font-semibold hover:text-purple-900">FAQ</Link>
-          <Link to="/feedback" className="text-purple-700 font-semibold hover:text-purple-900">Feedback</Link>
-          <Link to="/login" className="text-purple-700 font-semibold hover:text-purple-900">Login</Link>
-        </div>
-      </nav>
-
       {/* Hero Section */}
       <section className="bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600 text-white text-center py-32 px-6 shadow-lg">
         <motion.h1
@@ -92,12 +80,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-gradient-to-r from-purple-700 via-fuchsia-700 to-pink-700 text-white text-center py-6 mt-auto shadow-inner">
-        <p className="text-sm">
-          &copy; {new Date().getFullYear()} <span className="font-semibold">Event Manager</span>. All rights reserved.
-        </p>
-      </footer>
     </div>
   );
 }

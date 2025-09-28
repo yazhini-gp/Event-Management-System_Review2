@@ -21,14 +21,27 @@ const authMiddleware = (req, res, next) => {
 // Create Event
 router.post("/create", authMiddleware, async (req, res) => {
   try {
-    const { title, description, date, guests } = req.body;
+    const { title, description, startAt, endAt, timezone, location, status, guests, category } = req.body;
+
+    if (!title || !startAt) {
+      return res.status(400).json({ error: "title and startAt are required" });
+    }
+
+    if (endAt && new Date(endAt) < new Date(startAt)) {
+      return res.status(400).json({ error: "endAt cannot be before startAt" });
+    }
 
     const event = new Event({
       title,
       description,
-      date,
+      startAt,
+      endAt,
+      timezone: timezone || "UTC",
+      location,
+      status: status || "published",
       createdBy: req.user,
       guests,
+      category,
     });
 
     await event.save();
@@ -48,10 +61,23 @@ router.get("/my-events", authMiddleware, async (req, res) => {
   }
 });
 
+// List Events where user is registered
+router.get("/my-registrations", authMiddleware, async (req, res) => {
+  try {
+    const events = await Event.find({ registeredUsers: req.user })
+      .populate("createdBy", "name email");
+    res.json(Array.isArray(events) ? events : []);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get ALL events for user dashboard
 router.get("/", authMiddleware, async (req, res) => {
   try {
-    const events = await Event.find()
+    const q = {};
+    if (req.query.category) q.category = req.query.category;
+    const events = await Event.find(q)
       .populate("registeredUsers", "name email"); // <-- populate registered users
     res.json(Array.isArray(events) ? events : []); // always send an array
   } catch (error) {
@@ -62,7 +88,9 @@ router.get("/", authMiddleware, async (req, res) => {
 // Get all events created by any admin
 router.get("/admin-events", authMiddleware, async (req, res) => {
   try {
-    const events = await Event.find()
+    const q = {};
+    if (req.query.category) q.category = req.query.category;
+    const events = await Event.find(q)
       .populate("createdBy", "name email role")       // creator info
       .populate("registeredUsers", "name email");     // registered users
     res.json(Array.isArray(events) ? events : []);    // always an array
@@ -86,17 +114,25 @@ router.get("/:id", authMiddleware, async (req, res) => {
 // Register logged-in user for an event
 router.post("/register/:id", authMiddleware, async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id);
+    const { id } = req.params;
+    
+    // Check if user is already registered
+    const event = await Event.findById(id);
     if (!event) return res.status(404).json({ error: "Event not found" });
-
-    // Prevent duplicate registration
-    if (event.registeredUsers.includes(req.user)) {
-      return res.status(400).json({ error: "Already registered" });
+    
+    const isAlreadyRegistered = event.registeredUsers.some(userId => String(userId) === String(req.user));
+    if (isAlreadyRegistered) {
+      return res.status(400).json({ error: "You are already registered for this event" });
     }
-
-    event.registeredUsers.push(req.user);
-    await event.save();
-    res.json({ msg: "Registered successfully!", event });
+    
+    // Add user to registeredUsers
+    const updated = await Event.findOneAndUpdate(
+      { _id: id },
+      { $addToSet: { registeredUsers: req.user } },
+      { new: true }
+    );
+    
+    res.json({ msg: "Registered successfully!", event: updated });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -107,8 +143,8 @@ router.post("/register/:id", authMiddleware, async (req, res) => {
 // Update Event
 router.put("/:id", authMiddleware, async (req, res) => {
   try {
-    const { id } = req.params;
-    const { title, description, date, guests } = req.body;
+  const { id } = req.params;
+  const { title, description, startAt, endAt, timezone, location, status, guests, category } = req.body;
 
     // Find event by ID and check ownership
     let event = await Event.findOne({ _id: id, createdBy: req.user });
@@ -119,8 +155,18 @@ router.put("/:id", authMiddleware, async (req, res) => {
     // Update fields
     if (title) event.title = title;
     if (description) event.description = description;
-    if (date) event.date = date;
+    if (typeof startAt !== "undefined") event.startAt = startAt;
+    if (typeof endAt !== "undefined") {
+      if (endAt && event.startAt && new Date(endAt) < new Date(event.startAt)) {
+        return res.status(400).json({ error: "endAt cannot be before startAt" });
+      }
+      event.endAt = endAt;
+    }
+    if (timezone) event.timezone = timezone;
+    if (location) event.location = location;
+    if (status) event.status = status;
     if (guests) event.guests = guests;
+    if (typeof category !== "undefined") event.category = category;
 
     await event.save();
     res.json({ msg: "Event updated successfully!", event });
@@ -130,15 +176,15 @@ router.put("/:id", authMiddleware, async (req, res) => {
 });
 
 
-// DELETE an event
-router.delete("/:id", async (req, res) => {
+// DELETE an event (auth + ownership)
+router.delete("/:id", authMiddleware, async (req, res) => {
   try {
-    const event = await Event.findByIdAndDelete(req.params.id);
-
+    const { id } = req.params;
+    const event = await Event.findOne({ _id: id, createdBy: req.user });
     if (!event) {
-      return res.status(404).json({ msg: "Event not found!" });
+      return res.status(404).json({ msg: "Event not found or not authorized" });
     }
-
+    await event.deleteOne();
     res.json({ msg: "Event deleted successfully!" });
   } catch (err) {
     console.error(err.message);
