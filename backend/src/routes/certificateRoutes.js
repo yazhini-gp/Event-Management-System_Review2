@@ -17,6 +17,7 @@ const authMiddleware = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = decoded.id;
+    req.role = decoded.role; // Include role in request object
     next();
   } catch (e) {
     return res.status(401).json({ error: "Invalid token" });
@@ -53,8 +54,11 @@ router.get("/event/:eventId", authMiddleware, async (req, res) => {
     
     if (!event) return res.status(404).json({ error: "Event not found" });
     
-    // Authorization: only event organizer
-    if (String(event.createdBy) !== req.user) {
+    // Authorization: only event organizer or admin
+    const isOrganizer = String(event.createdBy) === req.user;
+    const isAdmin = req.role === 'admin';
+    
+    if (!isOrganizer && !isAdmin) {
       return res.status(403).json({ error: "Not authorized" });
     }
 
@@ -97,9 +101,8 @@ router.get("/:eventId/:userId", authMiddleware, async (req, res) => {
     const isSelf = req.user === String(userId);
     const isOrganizer = String(event.createdBy) === req.user;
     
-    // Check if user is admin (you can add more admin role checks here)
-    const currentUser = await User.findById(req.user);
-    const isAdmin = currentUser && currentUser.role === 'admin';
+    // Check if user is admin using role from token
+    const isAdmin = req.role === 'admin';
     
     if (!isSelf && !isOrganizer && !isAdmin) {
       return res.status(403).json({ error: "Not authorized" });
@@ -108,7 +111,7 @@ router.get("/:eventId/:userId", authMiddleware, async (req, res) => {
     // Fetch organizer signature or fallback
     let signaturePath;
     const orgSig = await OrganizerSignature.findOne({ user: event.createdBy });
-    if (orgSig) {
+    if (orgSig && orgSig.fileUrl) {
       signaturePath = path.join(__dirname, `../../${orgSig.fileUrl}`);
     } else {
       signaturePath = path.join(__dirname, "../../frontend/public/signature.jpg");
@@ -172,8 +175,14 @@ router.get("/:eventId/:userId", authMiddleware, async (req, res) => {
         doc.image(signaturePath, doc.page.width / 2 - 60, doc.y, { width: 120 });
         doc.moveDown(1);
         doc.fontSize(14).text("Organizer Signature", { align: "center" });
+      } else {
+        console.log(`Signature file not found at: ${signaturePath}`);
+        doc.fontSize(14).text("Organizer Signature", { align: "center" });
       }
-    } catch (_) {}
+    } catch (error) {
+      console.error('Error adding signature to certificate:', error);
+      doc.fontSize(14).text("Organizer Signature", { align: "center" });
+    }
 
     // Certificate number - use existing or create new
     const certificateNo = existingCertificate?.certificateNo || randomUUID();
@@ -196,6 +205,132 @@ router.get("/:eventId/:userId", authMiddleware, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Bulk certificate generation endpoint (creates records without streaming PDFs)
+router.post("/bulk/:eventId", authMiddleware, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { certificates } = req.body; // Array of { userId, type, position?, achievement? }
+    
+    console.log('Bulk certificate generation request:', { eventId, certificates });
+    console.log('Processing certificates:', certificates.map(cert => ({
+      userId: cert.userId,
+      type: cert.type,
+      position: cert.position,
+      achievement: cert.achievement
+    })));
+    
+    const event = await Event.findById(eventId);
+    if (!event) {
+      console.log('Event not found:', eventId);
+      return res.status(404).json({ error: "Event not found" });
+    }
+    
+    console.log('Found event:', { id: event._id, title: event.title });
+    
+    // Authorization: only event organizer or admin
+    const isOrganizer = String(event.createdBy) === req.user;
+    const isAdmin = req.role === 'admin';
+    
+    console.log('Authorization check:', { isOrganizer, isAdmin, userId: req.user, role: req.role });
+    
+    if (!isOrganizer && !isAdmin) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+
+    const results = [];
+    
+    for (const certData of certificates) {
+      const { userId, type, position, achievement } = certData;
+      
+      console.log(`Processing certificate for user ${userId}:`, {
+        userId,
+        type,
+        position,
+        achievement,
+        originalData: certData
+      });
+      
+      // Check if certificate already exists
+      const existingCertificate = await Certificate.findOne({ event: eventId, user: userId });
+      
+      if (!existingCertificate) {
+        // Validate required fields
+        if (!event._id) {
+          console.error(`Event ID is undefined for event:`, event);
+          results.push({ userId, success: false, error: 'Event ID is invalid' });
+          continue;
+        }
+        
+        if (!userId) {
+          console.error(`User ID is undefined for certificate data:`, certData);
+          results.push({ userId, success: false, error: 'User ID is invalid' });
+          continue;
+        }
+        
+        const certificateNo = randomUUID();
+        const certificateData = {
+          event: event._id,
+          user: userId,
+          certificateNo,
+          certificateType: type || 'participation',
+          position: type === 'winner' ? position : undefined,
+          achievement: type === 'achievement' ? achievement : undefined,
+        };
+        
+        console.log(`Creating certificate for user ${userId}:`, certificateData);
+        
+        try {
+          const newCertificate = await Certificate.create(certificateData);
+          results.push({ userId, success: true, certificateId: newCertificate._id, type: type });
+        } catch (createError) {
+          console.error(`Error creating certificate for user ${userId}:`, createError);
+          results.push({ userId, success: false, error: createError.message });
+        }
+      } else {
+        console.log(`Certificate already exists for user ${userId}`);
+        results.push({ userId, success: true, certificateId: existingCertificate._id, type: existingCertificate.certificateType, message: 'Certificate already exists' });
+      }
+    }
+    
+    res.json({ 
+      message: 'Bulk certificate generation completed',
+      results,
+      totalProcessed: certificates.length,
+      successCount: results.filter(r => r.success).length,
+      errorCount: results.filter(r => !r.success).length
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Check if certificate exists (without generating PDF)
+router.get("/exists/:eventId/:userId", authMiddleware, async (req, res) => {
+  try {
+    const { eventId, userId } = req.params;
+    
+    // Authorization: allow if organizer, self, or admin
+    const event = await Event.findById(eventId);
+    if (!event) return res.status(404).json({ exists: false });
+    
+    const isSelf = req.user === String(userId);
+    const isOrganizer = String(event.createdBy) === req.user;
+    const currentUser = await User.findById(req.user);
+    const isAdmin = currentUser && currentUser.role === 'admin';
+    
+    if (!isSelf && !isOrganizer && !isAdmin) {
+      return res.status(403).json({ exists: false });
+    }
+
+    const certificate = await Certificate.findOne({ event: eventId, user: userId });
+    res.json({ exists: !!certificate, certificateId: certificate?._id });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ exists: false });
   }
 });
 

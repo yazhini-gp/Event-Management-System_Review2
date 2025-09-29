@@ -17,7 +17,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const path = require("path");
 app.use(helmet());
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 1000 })); // Increased limit temporarily
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // connect DB

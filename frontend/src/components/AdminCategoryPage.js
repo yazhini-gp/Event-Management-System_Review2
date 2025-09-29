@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { Calendar, Edit3, Trash2, Send, ArrowLeft } from "lucide-react";
 
 export default function AdminCategoryPage({ token }) {
   const { cat } = useParams();
@@ -7,7 +8,7 @@ export default function AdminCategoryPage({ token }) {
   const [events, setEvents] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ title: "", description: "", startAt: "", endAt: "" });
-  const [rsvpForEvent, setRsvpForEvent] = useState({}); // eventId -> { counts, list }
+  const [rsvpForEvent, setRsvpForEvent] = useState({});
 
   useEffect(() => {
     (async () => {
@@ -93,43 +94,38 @@ export default function AdminCategoryPage({ token }) {
   };
 
   return (
-    <div className="p-2 sm:p-4">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="text-purple-600 hover:text-purple-700 font-medium">← Back</button>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">{cat} Events</h1>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate(-1)} className="text-purple-600 hover:text-purple-700 font-medium flex items-center">
+              <ArrowLeft className="w-4 h-4 mr-1" /> Back
+            </button>
+            <h1 className="text-3xl font-bold text-gray-900">{cat} Events</h1>
+          </div>
+          <Link to={`/admin/category/${encodeURIComponent(cat)}/create`} className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg hover:from-purple-700 hover:to-pink-700">Create {cat} Event</Link>
         </div>
-        <Link to={`/admin/category/${encodeURIComponent(cat)}/create`} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">Create {cat} Event</Link>
-      </div>
 
-      {events.length === 0 ? (
-        <p className="text-gray-600">No events yet in this category.</p>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {events.map((ev) => (
-            <div key={ev._id} className="bg-white p-5 rounded-xl border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">{ev.title}</h3>
-              <p className="text-gray-600">{ev.description}</p>
-              <p className="text-sm text-gray-500 mt-1">📅 {ev.startAt ? new Date(ev.startAt).toLocaleString() : ''}</p>
-              <p className="text-sm text-gray-500">👤 Created by: {ev.createdBy?.name} ({ev.createdBy?.email})</p>
-              <p className="text-sm text-gray-500">📝 Registered Users: {ev.registeredUsers?.length || 0}</p>
-              
-              <div className="flex gap-2 mt-3">
-                <button
-                  className="px-3 py-2 bg-amber-500 text-white rounded hover:bg-amber-600"
-                  onClick={() => startEdit(ev)}
-                >
-                  Edit
-                </button>
-                <button
-                  className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-                  onClick={() => deleteEvent(ev._id)}
-                >
-                  Delete
-                </button>
-                <button
-                  className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                  onClick={async () => {
+        {events.length === 0 ? (
+          <div className="bg-white rounded-2xl shadow p-10 text-center text-gray-600">No events yet in this category.</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {events.map((ev) => (
+              <div key={ev._id} className="bg-white p-6 rounded-2xl shadow border border-gray-100">
+                <div className="flex items-start justify-between mb-2">
+                  <h3 className="text-lg font-bold text-gray-900">{ev.title}</h3>
+                  <span className="text-xs px-2 py-1 rounded-full bg-blue-100 text-blue-700">{new Date(ev.startAt).toLocaleDateString()}</span>
+                </div>
+                {ev.description && <p className="text-gray-600 mb-3 line-clamp-2">{ev.description}</p>}
+                <div className="text-sm text-gray-600 space-y-1 mb-3">
+                  <div className="flex items-center"><Calendar className="w-4 h-4 mr-2" /> {ev.startAt ? new Date(ev.startAt).toLocaleString() : ''}</div>
+                  <div>Created by: {ev.createdBy?.name} ({ev.createdBy?.email})</div>
+                  <div>Registered Users: {ev.registeredUsers?.length || 0}</div>
+                </div>
+                <div className="flex gap-2">
+                  <button className="px-3 py-2 bg-amber-500 text-white rounded hover:bg-amber-600 flex items-center"><Edit3 className="w-4 h-4 mr-1" /> Edit</button>
+                  <button className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 flex items-center" onClick={() => deleteEvent(ev._id)}><Trash2 className="w-4 h-4 mr-1" /> Delete</button>
+                  <button className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center" onClick={async () => {
                     const emails = prompt('Enter emails (comma separated)');
                     if (!emails) return;
                     const list = emails.split(',').map(x => x.trim()).filter(Boolean);
@@ -143,82 +139,38 @@ export default function AdminCategoryPage({ token }) {
                       const data = await res.json();
                       if (data.msg) alert('Invitations sent'); else alert(data.error || 'Failed');
                     } catch (e) { console.error(e); }
-                  }}
-                >
-                  Send Invites
-                </button>
-                <button
-                  className="px-3 py-2 bg-purple-700 text-white rounded hover:bg-purple-800"
-                  onClick={() => loadRsvp(ev._id)}
-                >
-                  Load RSVPs
-                </button>
+                  }}><Send className="w-4 h-4 mr-1" /> Send Invites</button>
+                  <button className="px-3 py-2 bg-purple-700 text-white rounded hover:bg-purple-800" onClick={() => loadRsvp(ev._id)}>Load RSVPs</button>
+                </div>
+
+                {rsvpForEvent[ev._id]?.counts && (
+                  <div className="mt-3 text-sm text-gray-700">
+                    <p>RSVPs: Going {rsvpForEvent[ev._id].counts.going || 0} · Maybe {rsvpForEvent[ev._id].counts.maybe || 0} · Not going {rsvpForEvent[ev._id].counts.not_going || 0}</p>
+                  </div>
+                )}
               </div>
+            ))}
+          </div>
+        )}
 
-              {ev.registeredUsers?.length > 0 && (
-                <div className="mt-3">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Registered Users:</p>
-                  <ul className="bg-gray-100 p-3 rounded-lg text-gray-700 text-sm">
-                    {ev.registeredUsers.map((user) => (
-                      <li key={user._id} className="mb-1">
-                        {user.name} ({user.email})
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {rsvpForEvent[ev._id]?.counts && (
-                <div className="mt-3 text-sm text-gray-700">
-                  <p>RSVPs: Going {rsvpForEvent[ev._id].counts.going || 0} · Maybe {rsvpForEvent[ev._id].counts.maybe || 0} · Not going {rsvpForEvent[ev._id].counts.not_going || 0}</p>
-                  {Array.isArray(rsvpForEvent[ev._id].rsvps) && rsvpForEvent[ev._id].rsvps.length > 0 && (
-                    <ul className="mt-2 bg-gray-50 p-2 rounded">
-                      {rsvpForEvent[ev._id].rsvps.map((r) => (
-                        <li key={r._id}>{r.user?.name || r.user?.email}: {r.status}</li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-      {editingId && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white p-5 rounded-xl border border-gray-200 w-full max-w-lg">
-            <h3 className="text-lg font-semibold mb-2">Edit Event</h3>
-            <input
-              className="w-full p-2 border border-gray-300 rounded mb-2"
-              value={editForm.title}
-              onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-            />
-            <textarea
-              className="w-full p-2 border border-gray-300 rounded mb-2"
-              value={editForm.description}
-              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-            />
-            <div className="grid grid-cols-2 gap-2 mb-2">
-              <input
-                type="datetime-local"
-                className="w-full p-2 border border-gray-300 rounded"
-                value={editForm.startAt}
-                onChange={(e) => setEditForm({ ...editForm, startAt: e.target.value })}
-              />
-              <input
-                type="datetime-local"
-                className="w-full p-2 border border-gray-300 rounded"
-                value={editForm.endAt}
-                onChange={(e) => setEditForm({ ...editForm, endAt: e.target.value })}
-              />
-            </div>
-            <div className="flex gap-2 justify-end">
-              <button className="px-3 py-1" onClick={() => setEditingId(null)}>Cancel</button>
-              <button className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700" onClick={saveEdit}>Save</button>
+        {editingId && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4">
+            <div className="bg-white p-6 rounded-2xl shadow w-full max-w-lg">
+              <h3 className="text-xl font-semibold mb-3">Edit Event</h3>
+              <input className="w-full p-3 border border-gray-200 rounded-xl mb-2" value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} />
+              <textarea className="w-full p-3 border border-gray-200 rounded-xl mb-2" value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <input type="datetime-local" className="w-full p-3 border border-gray-200 rounded-xl" value={editForm.startAt} onChange={(e) => setEditForm({ ...editForm, startAt: e.target.value })} />
+                <input type="datetime-local" className="w-full p-3 border border-gray-200 rounded-xl" value={editForm.endAt} onChange={(e) => setEditForm({ ...editForm, endAt: e.target.value })} />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button className="px-3 py-2" onClick={() => setEditingId(null)}>Cancel</button>
+                <button className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" onClick={saveEdit}>Save</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

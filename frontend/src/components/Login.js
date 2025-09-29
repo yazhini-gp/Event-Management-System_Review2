@@ -1,10 +1,14 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { Mail, Lock, UserCircle2, ArrowRight, UserCheck } from "lucide-react";
+import { motion } from "framer-motion";
 
 export default function Login({ onLogin }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -12,6 +16,7 @@ export default function Login({ onLogin }) {
     if (!role) return alert("Select your role!");
 
     try {
+      setLoading(true);
       const res = await fetch("http://localhost:5000/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -24,62 +29,94 @@ export default function Login({ onLogin }) {
       } else alert(data.error || "Login failed");
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center h-screen bg-gradient-to-r from-purple-600 via-fuchsia-600 to-pink-600">
-      <form
-        onSubmit={handleLogin}
-        className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm"
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center px-4">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8"
       >
-        <h2 className="text-3xl font-extrabold mb-6 text-center text-purple-700">
-          Login
-        </h2>
+        <div className="text-center mb-6">
+          <div className="w-14 h-14 mx-auto rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 flex items-center justify-center text-white">
+            <UserCheck className="w-7 h-7" />
+          </div>
+          <h2 className="mt-4 text-3xl font-bold text-gray-900">Welcome back</h2>
+          <p className="mt-1 text-gray-600">Login to continue to your dashboard</p>
+        </div>
 
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          className="w-full p-3 border rounded-lg mb-4 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-        />
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full pl-10 pr-4 p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            />
+          </div>
 
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          className="w-full p-3 border rounded-lg mb-4 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-        />
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full pl-10 pr-20 p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-600 hover:text-gray-800"
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
 
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          required
-          className="w-full p-3 border rounded-lg mb-6 focus:ring-2 focus:ring-pink-500 focus:outline-none"
-        >
-          <option value="">Select Role</option>
-          <option value="user">User</option>
-          <option value="admin">Admin</option>
-        </select>
+          <div className="relative">
+            <UserCircle2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <select
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              required
+              className="w-full pl-10 pr-4 p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none bg-white"
+            >
+              <option value="">Select Role</option>
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
 
-        <button
-          type="submit"
-          className="w-full bg-green-500 text-white font-semibold p-3 rounded-lg shadow-md hover:bg-green-600 transition duration-300"
-        >
-          Login
-        </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold p-3 rounded-xl shadow-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200 flex items-center justify-center"
+          >
+            {loading ? "Logging in..." : (
+              <>
+                Login
+                <ArrowRight className="w-5 h-5 ml-2" />
+              </>
+            )}
+          </button>
+        </form>
 
-        <p className="mt-4 text-center text-gray-600">
-          Don&apos;t have an account?{" "}
-          <Link to="/signup" className="text-pink-600 font-semibold hover:underline">
+        <p className="mt-6 text-center text-gray-600">
+          Don&apos;t have an account? {" "}
+          <Link to="/signup" className="text-purple-600 font-semibold hover:underline">
             Signup
           </Link>
         </p>
-      </form>
+      </motion.div>
     </div>
   );
 }
